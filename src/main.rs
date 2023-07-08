@@ -1,7 +1,8 @@
 use anyhow::Result;
+use aws_sdk_s3::Client as S3Client;
 use clap::Parser;
+use dialoguer::Confirm;
 use std::fmt::Debug;
-use delete_bucket::{OutputType, StsClient};
 
 #[derive(Debug, Parser)]
 struct Opt {
@@ -17,13 +18,9 @@ struct Opt {
     #[arg(short, long)]
     force: bool,
 
-    /// Bucket to delete 
+    /// Bucket to delete
     #[arg(short, long)]
-    bucket: Vec<String>,
-
-    #[arg(value_enum)]
-    #[arg(short, long,default_value_t=OutputType::String)]
-    output_type: OutputType,
+    bucket: String,
 }
 
 #[tokio::main]
@@ -35,8 +32,29 @@ async fn main() -> Result<()> {
 
     let shared_config = delete_bucket::get_aws_config(args.profile, region_provider).await;
 
-    let client = StsClient::new(&shared_config);
-    delete_bucket::get_caller_identity(&client, args.output_type, &mut std::io::stdout()).await?;
+    let client = S3Client::new(&shared_config);
+    if args.force != true {
+        if Confirm::new()
+            .with_prompt(format!(
+                "Do you want to continue with the deletion of {}",
+                args.bucket
+            ))
+            .default(false)
+            .interact()?
+        {
+            if let Err(e) = delete_bucket::delete_bucket(&client, &args.bucket, &mut std::io::stdout()).await {
+                eprintln!("Error deleting bucket: {}", e);
+                std::process::exit(1);
+            }
+        } else {
+            println!("Cancelled");
+        }
+    } else {
+        if let Err(e) = delete_bucket::delete_bucket(&client, &args.bucket, &mut std::io::stdout()).await {
+            eprintln!("Error deleting bucket: {}", e);
+            std::process::exit(1);
+        }
+    }
 
     Ok(())
 }
