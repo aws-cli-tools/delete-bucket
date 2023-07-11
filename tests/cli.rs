@@ -37,7 +37,7 @@ mod cli_tests {
         rand::thread_rng().fill(&mut buffer[..]);
 
         // Upload the file
-        let resp = client
+        let _ = client
             .put_object()
             .bucket(&bucket_name)
             .key(object_key)

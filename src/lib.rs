@@ -1,12 +1,9 @@
 use anyhow::Result;
-use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_s3::operation::list_objects_v2::{ListObjectsV2Error, ListObjectsV2Output};
 use aws_sdk_s3::types::{Delete, ObjectIdentifier};
 use aws_sdk_s3::Client;
 use aws_sdk_sts::client::customize::Response;
-use aws_sdk_sts::config::Region;
 use aws_sdk_sts::error::SdkError;
-use aws_types::SdkConfig;
 use console::{style, Emoji};
 use futures::stream::FuturesUnordered;
 use indicatif::ProgressBar;
@@ -19,31 +16,6 @@ static START_PROCESS: Emoji<'_, '_> = Emoji("🕛  ", "");
 static MIDDLE_PROCESS: Emoji<'_, '_> = Emoji("🕧  ", "");
 static END_PROCESS: Emoji<'_, '_> = Emoji("🕐  ", "");
 static SPARKLE: Emoji<'_, '_> = Emoji("✨ ", ":-)");
-
-pub fn get_region_provider(region: Option<String>) -> RegionProviderChain {
-    info!("Getting region details");
-
-    RegionProviderChain::first_try(region.map(Region::new))
-        .or_default_provider()
-        .or_else(Region::new("us-west-2"))
-}
-
-pub async fn get_aws_config(
-    profile: Option<String>,
-    region_provider: RegionProviderChain,
-) -> SdkConfig {
-    if let Some(p) = profile {
-        info!("Using profile - {}", p);
-        aws_config::from_env()
-            .region(region_provider)
-            .profile_name(p)
-            .load()
-            .await
-    } else {
-        info!("Using default profile");
-        aws_config::from_env().region(region_provider).load().await
-    }
-}
 
 async fn get_objects_to_delete(
     client: &Client,

@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.71"
 async-trait = "0.1.68"
+aws-cli-lib = { git = "https://github.com/aws-cli-tools/aws-cli-lib.git", version = "0.1.0" }
 aws-config = "0.55.3"
 aws-sdk-s3 = "0.28.0"
 aws-sdk-sts = "0.28.0"

@@ -7,14 +7,9 @@ use dialoguer::Confirm;
 use std::fmt::Debug;
 
 #[derive(Debug, Parser)]
-struct Opt {
-    /// The AWS Region.
-    #[arg(short, long)]
-    region: Option<String>,
-
-    /// Which profile to use.
-    #[arg(short, long)]
-    profile: Option<String>,
+struct DeleteBucketOpt {
+    #[clap(flatten)]
+    base: aws_cli_lib::Opt,
 
     /// Do not prompt for approval
     #[arg(short, long)]
@@ -35,11 +30,11 @@ async fn delete_and_capture(client: &Client, bucket_name: &str) {
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
-    let args = Opt::parse();
+    let args = DeleteBucketOpt::parse();
 
-    let region_provider = delete_bucket::get_region_provider(args.region);
+    let region_provider = aws_cli_lib::get_region_provider(args.base.region);
 
-    let shared_config = delete_bucket::get_aws_config(args.profile, region_provider).await;
+    let shared_config = aws_cli_lib::get_aws_config(args.base.profile, region_provider).await;
 
     let client = S3Client::new(&shared_config);
     if !args.force {
