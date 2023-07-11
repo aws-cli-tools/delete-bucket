@@ -16,6 +16,7 @@ static START_PROCESS: Emoji<'_, '_> = Emoji("🕛  ", "");
 static MIDDLE_PROCESS: Emoji<'_, '_> = Emoji("🕧  ", "");
 static END_PROCESS: Emoji<'_, '_> = Emoji("🕐  ", "");
 static SPARKLE: Emoji<'_, '_> = Emoji("✨ ", ":-)");
+const CHUNK_SIZE: usize = 1000;
 
 async fn get_objects_to_delete(
     client: &Client,
@@ -49,10 +50,10 @@ async fn delete_objects(
     }
     let deleted_objects_count = delete_objects.len();
     let tasks = FuturesUnordered::new();
-    let num_tasks = delete_objects.chunks(1000).len();
+    let num_tasks = delete_objects.chunks(CHUNK_SIZE).len();
     let pb = ProgressBar::new(num_tasks as u64);
 
-    for chunk in delete_objects.chunks(1000) {
+    for chunk in delete_objects.chunks(CHUNK_SIZE) {
         let task = client
             .delete_objects()
             .bucket(bucket_name)
@@ -71,13 +72,13 @@ async fn delete_objects(
     tasks.collect::<Vec<_>>().await;
 
     let objects: ListObjectsV2Output = client.list_objects_v2().bucket(bucket_name).send().await?;
-
-    match objects.key_count {
-        0 => Ok(deleted_objects_count),
-        _ => Err(anyhow::anyhow!(format!(
+    if objects.key_count == 0 {
+        Ok(deleted_objects_count)
+    } else {
+        Err(anyhow::anyhow!(format!(
             "There were still objects left in the bucket. Failed to delete '{}' objects.",
             objects.key_count
-        ))),
+        )))
     }
 }
 
@@ -94,6 +95,7 @@ pub async fn delete_bucket(
     )?;
 
     let result = get_objects_to_delete(client, bucket_name).await;
+
     let objects = match result {
         Ok(output) => output,
         Err(err) => {

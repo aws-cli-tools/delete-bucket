@@ -1,6 +1,5 @@
 use anyhow::Result;
 use aws_sdk_s3::Client as S3Client;
-use aws_sdk_s3::Client;
 use clap::Parser;
 use console::style;
 use dialoguer::Confirm;
@@ -20,7 +19,7 @@ struct DeleteBucketOpt {
     bucket: String,
 }
 
-async fn delete_and_capture(client: &Client, bucket_name: &str) {
+async fn delete_and_capture(client: &S3Client, bucket_name: &str) {
     if let Err(e) = delete_bucket::delete_bucket(client, bucket_name, &mut std::io::stdout()).await
     {
         eprintln!("Error deleting bucket: {}", e);
