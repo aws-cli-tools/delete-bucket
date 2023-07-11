@@ -7,11 +7,18 @@ use aws_sdk_sts::client::customize::Response;
 use aws_sdk_sts::config::Region;
 use aws_sdk_sts::error::SdkError;
 use aws_types::SdkConfig;
+use console::{style, Emoji};
 use futures::stream::FuturesUnordered;
-use indicatif::ProgressIterator;
+use indicatif::ProgressBar;
 use log::info;
 
 use tokio_stream::StreamExt;
+
+static LOOKING_GLASS: Emoji<'_, '_> = Emoji("🔍  ", "");
+static START_PROCESS: Emoji<'_, '_> = Emoji("🕛  ", "");
+static MIDDLE_PROCESS: Emoji<'_, '_> = Emoji("🕧  ", "");
+static END_PROCESS: Emoji<'_, '_> = Emoji("🕐  ", "");
+static SPARKLE: Emoji<'_, '_> = Emoji("✨ ", ":-)");
 
 pub fn get_region_provider(region: Option<String>) -> RegionProviderChain {
     info!("Getting region details");
@@ -70,15 +77,24 @@ async fn delete_objects(
     }
     let deleted_objects_count = delete_objects.len();
     let tasks = FuturesUnordered::new();
+    let num_tasks = delete_objects.chunks(1000).len();
+    let pb = ProgressBar::new(num_tasks as u64);
 
-    for chunk in delete_objects.chunks(1000).progress() {
+    for chunk in delete_objects.chunks(1000) {
         let task = client
             .delete_objects()
             .bucket(bucket_name)
             .delete(Delete::builder().set_objects(Some(chunk.to_vec())).build())
             .send();
 
-        tasks.push(task);
+        let local_pb = pb.clone();
+        let wrapped_task = async move {
+            let result = task.await;
+            local_pb.inc(1);
+            result
+        };
+
+        tasks.push(wrapped_task);
     }
     tasks.collect::<Vec<_>>().await;
 
@@ -98,23 +114,55 @@ pub async fn delete_bucket(
     bucket_name: &str,
     mut writer: impl std::io::Write,
 ) -> Result<()> {
-    writeln!(writer, "Collecting objects to delete")?;
-    let objects = get_objects_to_delete(client, bucket_name).await?;
+    writeln!(
+        writer,
+        "{} {}Collecting objects to delete",
+        style("[1/5]").bold().dim(),
+        LOOKING_GLASS
+    )?;
+
+    let result = get_objects_to_delete(client, bucket_name).await;
+    let objects = match result {
+        Ok(output) => output,
+        Err(err) => {
+            return Err(err.into_service_error().into());
+        }
+    };
     let mut counter: i32 = 0;
     for list_output in &objects {
         counter += list_output.key_count();
     }
-    writeln!(writer, "Deleting {}", counter)?;
+    writeln!(
+        writer,
+        "{} {}Deleting {} objects ...",
+        style("[2/5]").bold().dim(),
+        START_PROCESS,
+        counter
+    )?;
     let deleted_objects_count = delete_objects(client, bucket_name, objects).await?;
     writeln!(
         writer,
-        "Successfully deleted '{}' objects.",
+        "{} {}Successfully deleted {} objects.",
+        style("[3/5]").bold().dim(),
+        MIDDLE_PROCESS,
         deleted_objects_count
     )?;
 
-    writeln!(writer, "Deleting the bucket '{}'.", bucket_name)?;
+    writeln!(
+        writer,
+        "{} {}Deleting the bucket {}.",
+        style("[4/5]").bold().dim(),
+        END_PROCESS,
+        style(bucket_name).white()
+    )?;
     client.delete_bucket().bucket(bucket_name).send().await?;
-    writeln!(writer, "Bucket '{}' deleted successfully.", bucket_name)?;
+    writeln!(
+        writer,
+        "{} {}Bucket {} deleted successfully.",
+        style("[5/5]").bold().dim(),
+        SPARKLE,
+        style(bucket_name).white()
+    )?;
 
     Ok(())
 }
