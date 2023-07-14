@@ -36,7 +36,7 @@ async fn get_objects_to_delete(
 async fn delete_objects(
     client: &Client,
     bucket_name: &str,
-    objects_to_delete: Vec<ListObjectsV2Output>,
+    objects_to_delete: &[ListObjectsV2Output],
 ) -> Result<usize> {
     info!("Calling 'delete_objects'");
     let mut delete_objects: Vec<ObjectIdentifier> = vec![];
@@ -113,7 +113,7 @@ pub async fn delete_bucket(
         START_PROCESS,
         counter
     )?;
-    let deleted_objects_count = delete_objects(client, bucket_name, objects).await?;
+    let deleted_objects_count = delete_objects(client, bucket_name, &objects).await?;
     writeln!(
         writer,
         "{} {}Successfully deleted {} objects.",
