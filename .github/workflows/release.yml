@@ -160,5 +160,22 @@ jobs:
         id: extract-version
         run: |
           printf "::set-output name=%s::%s\n" tag-name "${GITHUB_REF#refs/tags/}"
-
+  brew:
+    name: Upload binaries to brew
+    permissions:
+      contents: write
+    needs: [publish]
+    runs-on: ubuntu-latest      
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+      - name: Install bin-install
+        run: curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+      - name: Install rustwrap
+        run: cargo binstall -y rustwrap
+      - name: Deploy to brew
+        env:
+          TAG_NAME: ${{needs.publish.outputs.tagname}}
+          GITHUB_TOKEN: ${{secrets.DEPLOY_HOMBREW_SECRET}}
+        run: rustwrap --tag $TAG_NAME
 

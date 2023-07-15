@@ -13,7 +13,6 @@
     "source=${localEnv:HOME}/.aws,target=/home/vscode/.aws,type=bind,consistency=cached"
   ],
   "onCreateCommand": {
-    "llvm-tools-preview": "rustup component add llvm-tools-preview",
-    "cargo-audit": "cargo install cargo-audit"
+    "start-sccache": "sccache --start-server"
   }
 }

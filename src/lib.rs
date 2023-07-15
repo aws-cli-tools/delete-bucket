@@ -1,138 +1,142 @@
-use anyhow::{Context, Result};
-use async_trait::async_trait;
-use aws_config::meta::region::RegionProviderChain;
+use anyhow::Result;
+use aws_sdk_s3::operation::list_objects_v2::{ListObjectsV2Error, ListObjectsV2Output};
+use aws_sdk_s3::types::{Delete, ObjectIdentifier};
+use aws_sdk_s3::Client;
+use aws_sdk_sts::client::customize::Response;
 use aws_sdk_sts::error::SdkError;
-use aws_sdk_sts::operation::get_caller_identity::GetCallerIdentityError;
-use aws_sdk_sts::{config::Region, Client};
-use aws_types::SdkConfig;
-use clap::ValueEnum;
+use console::{style, Emoji};
+use futures::stream::FuturesUnordered;
+use indicatif::ProgressBar;
 use log::info;
-use mockall::*;
-use serde_json::json;
-use std::fmt::Debug;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-pub enum OutputType {
-    /// Output as json
-    Json,
-    /// Output as regular string
-    String,
+use tokio_stream::StreamExt;
+
+static LOOKING_GLASS: Emoji<'_, '_> = Emoji("🔍  ", "");
+static START_PROCESS: Emoji<'_, '_> = Emoji("🕛  ", "");
+static MIDDLE_PROCESS: Emoji<'_, '_> = Emoji("🕧  ", "");
+static END_PROCESS: Emoji<'_, '_> = Emoji("🕐  ", "");
+static SPARKLE: Emoji<'_, '_> = Emoji("✨ ", ":-)");
+const CHUNK_SIZE: usize = 1000;
+
+async fn get_objects_to_delete(
+    client: &Client,
+    bucket_name: &str,
+) -> Result<Vec<ListObjectsV2Output>, SdkError<ListObjectsV2Error, Response>> {
+    info!("Calling 'list_objects_v2 to pull objects to delete");
+    let paginator = client
+        .list_objects_v2()
+        .bucket(bucket_name)
+        .into_paginator()
+        .send();
+    paginator
+        .collect::<Result<Vec<ListObjectsV2Output>, SdkError<ListObjectsV2Error, Response>>>()
+        .await
 }
 
-#[automock]
-#[async_trait]
-pub trait GetCallerIdentity {
-    async fn get_caller_identity(
-        &self,
-    ) -> Result<
-        aws_sdk_sts::operation::get_caller_identity::GetCallerIdentityOutput,
-        SdkError<GetCallerIdentityError>,
-    >;
-}
-pub struct StsClient {
-    client: Client,
-}
-
-impl StsClient {
-    pub fn new(sdk_config: &::aws_types::sdk_config::SdkConfig) -> Self {
-        Self {
-            client: Client::new(sdk_config),
+async fn delete_objects(
+    client: &Client,
+    bucket_name: &str,
+    objects_to_delete: &[ListObjectsV2Output],
+) -> Result<usize> {
+    info!("Calling 'delete_objects'");
+    let mut delete_objects: Vec<ObjectIdentifier> = vec![];
+    for list_output in objects_to_delete {
+        for object in list_output.contents().unwrap_or_default() {
+            let obj_id = ObjectIdentifier::builder()
+                .set_key(Some(object.key().unwrap().to_string()))
+                .build();
+            delete_objects.push(obj_id);
         }
     }
-}
+    let deleted_objects_count = delete_objects.len();
+    let tasks = FuturesUnordered::new();
+    let num_tasks = delete_objects.chunks(CHUNK_SIZE).len();
+    let pb = ProgressBar::new(num_tasks as u64);
 
-#[async_trait]
-impl GetCallerIdentity for StsClient {
-    async fn get_caller_identity(
-        &self,
-    ) -> Result<
-        aws_sdk_sts::operation::get_caller_identity::GetCallerIdentityOutput,
-        SdkError<GetCallerIdentityError>,
-    > {
-        self.client.get_caller_identity().send().await
+    for chunk in delete_objects.chunks(CHUNK_SIZE) {
+        let task = client
+            .delete_objects()
+            .bucket(bucket_name)
+            .delete(Delete::builder().set_objects(Some(chunk.to_vec())).build())
+            .send();
+
+        let local_pb = pb.clone();
+        let wrapped_task = async move {
+            let result = task.await;
+            local_pb.inc(1);
+            result
+        };
+
+        tasks.push(wrapped_task);
     }
-}
-pub fn get_region_provider(region: Option<String>) -> RegionProviderChain {
-    info!("Getting region details");
+    tasks.collect::<Vec<_>>().await;
 
-    RegionProviderChain::first_try(region.map(Region::new))
-        .or_default_provider()
-        .or_else(Region::new("us-west-2"))
-}
-
-pub async fn get_aws_config(
-    profile: Option<String>,
-    region_provider: RegionProviderChain,
-) -> SdkConfig {
-    if let Some(p) = profile {
-        info!("Using profile - {}", p);
-        aws_config::from_env()
-            .region(region_provider)
-            .profile_name(p)
-            .load()
-            .await
+    let objects: ListObjectsV2Output = client.list_objects_v2().bucket(bucket_name).send().await?;
+    if objects.key_count == 0 {
+        Ok(deleted_objects_count)
     } else {
-        info!("Using default profile");
-        aws_config::from_env().region(region_provider).load().await
+        Err(anyhow::anyhow!(format!(
+            "There were still objects left in the bucket. Failed to delete '{}' objects.",
+            objects.key_count
+        )))
     }
 }
-pub async fn get_caller_identity(
-    client: &impl GetCallerIdentity,
-    output_type: OutputType,
+
+pub async fn delete_bucket(
+    client: &Client,
+    bucket_name: &str,
     mut writer: impl std::io::Write,
 ) -> Result<()> {
-    info!("Calling 'get_caller_identity'");
-    let response = client
-        .get_caller_identity()
-        .await
-        .with_context(|| "Failed loading AWS config details. Did you run 'aws configure' ?")?;
+    writeln!(
+        writer,
+        "{} {}Collecting objects to delete",
+        style("[1/5]").bold().dim(),
+        LOOKING_GLASS
+    )?;
 
-    info!("Successful call");
-    let account_id = response.account().unwrap_or_default();
-    let user_arn = response.arn().unwrap_or_default();
+    let result = get_objects_to_delete(client, bucket_name).await;
 
-    info!("Output type is {:?}", output_type);
-    match output_type {
-        OutputType::String => {
-            writeln!(writer, "AccountId = {}", account_id)?;
-            writeln!(writer, "UserARN = {}", user_arn)?;
+    let objects = match result {
+        Ok(output) => output,
+        Err(err) => {
+            return Err(err.into_service_error().into());
         }
-        OutputType::Json => {
-            let result = json!({
-                "accountId": account_id,
-                "UserARN": user_arn,
-            });
-            writeln!(writer, "{}", result)?;
-        }
+    };
+    let mut counter: i32 = 0;
+    for list_output in &objects {
+        counter += list_output.key_count();
     }
+    writeln!(
+        writer,
+        "{} {}Deleting {} objects ...",
+        style("[2/5]").bold().dim(),
+        START_PROCESS,
+        counter
+    )?;
+    let deleted_objects_count = delete_objects(client, bucket_name, &objects).await?;
+    writeln!(
+        writer,
+        "{} {}Successfully deleted {} objects.",
+        style("[3/5]").bold().dim(),
+        MIDDLE_PROCESS,
+        deleted_objects_count
+    )?;
+
+    writeln!(
+        writer,
+        "{} {}Deleting the bucket {}.",
+        style("[4/5]").bold().dim(),
+        END_PROCESS,
+        style(bucket_name).white()
+    )?;
+    client.delete_bucket().bucket(bucket_name).send().await?;
+    writeln!(
+        writer,
+        "{} {}Bucket {} deleted successfully.",
+        style("[5/5]").bold().dim(),
+        SPARKLE,
+        style(bucket_name).white()
+    )?;
 
     Ok(())
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use aws_sdk_sts::operation::get_caller_identity::GetCallerIdentityOutput;
-    use rstest::rstest;
-
-    #[rstest]
-    #[case(OutputType::String, "AccountId = account\nUserARN = arn\n")]
-    #[case(OutputType::Json, "{\"UserARN\":\"arn\",\"accountId\":\"account\"}\n")]
-    #[tokio::test]
-    pub async fn get_caller_identity_test(#[case] input: OutputType, #[case] expected: String) {
-        let mut result = Vec::new();
-        let mut mock = MockGetCallerIdentity::new();
-        let response = GetCallerIdentityOutput::builder()
-            .account("account")
-            .arn("arn")
-            .build();
-        mock.expect_get_caller_identity()
-            .returning(move || Ok(response.clone()));
-
-        let _ = get_caller_identity(&mock, input, &mut result).await;
-
-        let result_str = String::from_utf8(result).unwrap();
-
-        assert_eq!(&result_str, &expected.to_string());
-    }
 }

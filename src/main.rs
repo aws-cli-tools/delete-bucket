@@ -1,35 +1,57 @@
 use anyhow::Result;
+use aws_sdk_s3::Client as S3Client;
 use clap::Parser;
+use console::style;
+use dialoguer::Confirm;
 use std::fmt::Debug;
-use whoami::{OutputType, StsClient};
 
 #[derive(Debug, Parser)]
-struct Opt {
-    /// The AWS Region.
-    #[clap(short, long)]
-    region: Option<String>,
+struct DeleteBucketOpt {
+    #[clap(flatten)]
+    base: aws_cli_lib::Opt,
 
-    /// Which profile to use.
-    #[clap(short, long)]
-    profile: Option<String>,
+    /// Do not prompt for approval
+    #[arg(short, long)]
+    force: bool,
 
-    #[arg(value_enum)]
-    #[arg(default_value_t=OutputType::String)]
-    #[clap(short, long)]
-    output_type: OutputType,
+    /// Bucket to delete
+    #[arg(short, long)]
+    bucket: String,
 }
 
+async fn delete_and_capture(client: &S3Client, bucket_name: &str) {
+    if let Err(e) = delete_bucket::delete_bucket(client, bucket_name, &mut std::io::stdout()).await
+    {
+        eprintln!("Error deleting bucket: {}", e);
+        std::process::exit(1);
+    }
+}
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
-    let args = Opt::parse();
+    let args = DeleteBucketOpt::parse();
 
-    let region_provider = whoami::get_region_provider(args.region);
+    let region_provider = aws_cli_lib::get_region_provider(args.base.region);
 
-    let shared_config = whoami::get_aws_config(args.profile, region_provider).await;
+    let shared_config = aws_cli_lib::get_aws_config(args.base.profile, region_provider).await;
 
-    let client = StsClient::new(&shared_config);
-    whoami::get_caller_identity(&client, args.output_type, &mut std::io::stdout()).await?;
+    let client = S3Client::new(&shared_config);
+    if !args.force {
+        if Confirm::new()
+            .with_prompt(format!(
+                "Are you certain you'd like to delete the {} S3 bucket?",
+                style(&args.bucket).white().bold()
+            ))
+            .default(false)
+            .interact()?
+        {
+            delete_and_capture(&client, &args.bucket).await;
+        } else {
+            println!("Cancelled");
+        }
+    } else {
+        delete_and_capture(&client, &args.bucket).await;
+    }
 
     Ok(())
 }
