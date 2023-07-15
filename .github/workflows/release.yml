@@ -9,6 +9,8 @@ env:
   PROJECT_NAME: delete-bucket
 jobs:
   dist:
+    permissions:
+      id-token: write
     name: Dist
     runs-on: ${{ matrix.os }}
     strategy:
@@ -45,6 +47,12 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::201893381538:role/GitHubRole
+          role-session-name: GitHubActionsSession
       - name: Install ${{ matrix.rust }} toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -102,6 +110,8 @@ jobs:
       contents: write
     needs: [dist]
     runs-on: ubuntu-latest
+    outputs: 
+      tagname: ${{ steps.tagname.outputs.val }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
