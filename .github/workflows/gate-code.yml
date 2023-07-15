@@ -42,7 +42,7 @@ jobs:
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v3
         with:
-          files: "lcov"
+          files: "target/cov.lcov"
           token: ${{ secrets.CODECOV_TOKEN }}
    
     
