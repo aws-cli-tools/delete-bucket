@@ -12,3 +12,6 @@ target/
 # Code coveragte
 *.profraw
 cobertura.xml
+
+# homebrew
+dist
