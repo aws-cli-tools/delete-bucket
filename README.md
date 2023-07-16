@@ -31,7 +31,7 @@ Options:
 * `-b, --bucket` Bucket to delete.◊
 
 ## Speed comparison
-Deleting 10K files in a single bucket:
+Deleting 10K files in a single bucket on `c6i.2xlarge` machine:
 * `delete-bucket` - 6.234s
 * `aws s3 rm s3://bucket-name --recursive` [AWS Docs](https://docs.aws.amazon.com/AmazonS3/latest/userguide/empty-bucket.html) - 25.086s
 
