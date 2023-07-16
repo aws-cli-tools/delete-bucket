@@ -8,7 +8,7 @@
   <img src="https://github.com/aws-cli-tools/delete-bucket/assets/110536677/1433c22b-e555-4722-adb4-29ea5d2bf7f8" alt="A comics painting show an AWS S3 bucket being cut to pieces" width="256" height="256">
 </p>
 
-This command line interface (CLI) application is designed to interact with Amazon Web Services (AWS) S3 service for the purpose of deleting an existing S3 bucket. It provides an interactive way to delete a bucket and its contents securely, with optional prompt for confirmation to help prevent accidental deletion of important data.
+This CLI application is designed to interact with AWS S3 service for the purpose of deleting an existing S3 bucket. It provides an interactive way to delete a bucket and its contents securely, with optional prompt for confirmation to help prevent accidental deletion of important data.
 
 When executed, this CLI performs the following operations:
 
@@ -28,7 +28,14 @@ Options:
 * `-f, --force` Do not prompt for approval.
 * `-p, --profile` The AWS profile to use
 * `-r, --region` The AWS region to use
-* `-b, --bucket` Bucket to delete.
+* `-b, --bucket` Bucket to delete.◊
+
+## Speed comparison
+Deleting 10K files in a single bucket:
+* `delete-bucket` - 6.234s
+* `aws s3 rm s3://bucket-name --recursive` [AWS Docs](https://docs.aws.amazon.com/AmazonS3/latest/userguide/empty-bucket.html) - 25.086s
+
+That's fast! 💨
 
 ## Installation
 
@@ -39,6 +46,11 @@ There are two main methods for installing this tool:
 You can download the pre-compiled binaries directly from the GitHub releases page. Choose the correct binary depending on your operating system.
 
 Visit the [releases page](https://github.com/aws-cli-tools/delete-bucket/releases) to download the appropriate binary.
+For example (make sure to use the latest version):
+```bash
+wget https://github.com/aws-cli-tools/whoami/releases/download/v0.1.9/whoami-v0.1.9-x86_64-linux.tar.xz
+tar -xf whoami-v0.1.9-x86_64-linux.tar.xz
+```
 
 ### Method 2: Using Homebrew (for macOS users)
 
