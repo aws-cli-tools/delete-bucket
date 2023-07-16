@@ -99,7 +99,9 @@ pub async fn delete_bucket(
     let objects = match result {
         Ok(output) => output,
         Err(err) => {
-            return Err(err.into_service_error().into());
+            let service_error = err.into_service_error();
+            info!("Call failed {:?}", service_error.meta().code().unwrap());
+            return Err(anyhow::anyhow!("{}", service_error.meta().code().unwrap()));
         }
     };
     let mut counter: i32 = 0;
