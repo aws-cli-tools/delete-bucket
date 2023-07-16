@@ -100,7 +100,7 @@ pub async fn delete_bucket(
         Ok(output) => output,
         Err(err) => {
             let service_error = err.into_service_error();
-            info!("Call failed {:?}", service_error.meta().code().unwrap());
+            info!("Call failed {:?}", service_error);
             return Err(anyhow::anyhow!("{}", service_error.meta().code().unwrap()));
         }
     };
