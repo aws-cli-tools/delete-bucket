@@ -53,11 +53,10 @@ mod cli_tests {
             .stdout(predicate::str::contains("deleted successfully."));
 
         let objects = client.list_objects_v2().bucket(&bucket_name).send().await;
-        // Sometimes AWS deletes the bucket, but when querying for it, it might return, so I'm checking both 
+        // Sometimes AWS deletes the bucket, but when querying for it, it might return, so I'm checking both
         // situations.
-        match objects {
-            Ok(list) => assert!(list.key_count() == 0),
-            Err(_) => (),
+        if let Ok(list) = objects {
+            assert!(list.key_count() == 0)
         }
     }
 
