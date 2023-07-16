@@ -13,23 +13,9 @@ mod cli_tests {
     use rand::{distributions::Alphanumeric, Rng};
     use std::process::Command;
 
-    #[tokio::test]
-    async fn happy_flow() {
-        let region = "us-east-1";
-        let sdk_config = aws_config::from_env()
-            .region(Region::new(region))
-            .load()
-            .await;
-        let client = S3Client::new(&sdk_config);
-        // let constraint = BucketLocationConstraint::from(region);
-        let random_bucket_prefix: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(7)
-            .map(char::from)
-            .collect();
-        let bucket_name = format!("delete-bucket-it-{}", random_bucket_prefix).to_lowercase();
-
-        let _ = client.create_bucket().bucket(&bucket_name).send().await;
+    const REGION: &str = "us-east-1";
+    async fn create_tmp_bucket(client: &S3Client, bucket_name: &str) {
+        let _ = client.create_bucket().bucket(bucket_name).send().await;
 
         let object_key = "your-object-key";
 
@@ -39,14 +25,40 @@ mod cli_tests {
         // Upload the file
         let _ = client
             .put_object()
-            .bucket(&bucket_name)
+            .bucket(bucket_name)
             .key(object_key)
             .body(ByteStream::from(buffer.to_vec()))
             .send()
             .await;
+    }
+    #[tokio::test]
+    async fn happy_flow() {
+        let random_bucket_prefix: String = rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(7)
+            .map(char::from)
+            .collect();
+        let bucket_name = format!("delete-bucket-it-{}", random_bucket_prefix).to_lowercase();
+        let bucket_name2 = format!("delete-bucket2-it-{}", random_bucket_prefix).to_lowercase();
+
+        let sdk_config = aws_config::from_env()
+            .region(Region::new(REGION))
+            .load()
+            .await;
+        let client = S3Client::new(&sdk_config);
+
+        create_tmp_bucket(&client, &bucket_name).await;
+        create_tmp_bucket(&client, &bucket_name2).await;
 
         let mut cmd = Command::cargo_bin("delete-bucket").unwrap();
-        cmd.args(["--region", region, "--force", "--buckets", &bucket_name]);
+        cmd.args([
+            "--region",
+            REGION,
+            "--force",
+            "--buckets",
+            &bucket_name,
+            &bucket_name2,
+        ]);
 
         cmd.assert()
             .success()
