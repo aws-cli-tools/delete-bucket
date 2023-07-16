@@ -46,7 +46,7 @@ mod cli_tests {
             .await;
 
         let mut cmd = Command::cargo_bin("delete-bucket").unwrap();
-        cmd.args(["--region", region, "--force", "--bucket", &bucket_name]);
+        cmd.args(["--region", region, "--force", "--buckets", &bucket_name]);
 
         cmd.assert()
             .success()
@@ -67,7 +67,7 @@ mod cli_tests {
             "--region",
             "us-east-1",
             "--force",
-            "--bucket",
+            "--buckets",
             "bucket-is-missing.test.me",
         ]);
 

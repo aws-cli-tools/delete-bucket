@@ -6,6 +6,11 @@ use dialoguer::Confirm;
 use std::fmt::Debug;
 
 #[derive(Debug, Parser)]
+/// Delete S3 🪣. Use with caution!
+#[command(version, about, long_about = None)]
+#[clap(
+    after_help = "➡️  Looking for more OSS tools for AWS, visit us at https://github.com/aws-cli-tools"
+)]
 struct DeleteBucketOpt {
     #[clap(flatten)]
     base: aws_cli_lib::Opt,
@@ -14,17 +19,19 @@ struct DeleteBucketOpt {
     #[arg(short, long)]
     force: bool,
 
-    /// Bucket to delete
-    #[arg(short, long)]
-    bucket: String,
+    #[arg(short, long, num_args(1..))]
+    #[arg(help=format!("Buckets to delete, seperate with space, for example {} {} ", style(env!("CARGO_PKG_NAME")).white().bold(), style("-b bucket1 bucket2").white().bold()))]
+    buckets: Vec<String>,
 }
 
-async fn delete_and_capture(client: &S3Client, bucket_name: &str) {
+async fn delete_and_capture(client: &S3Client, bucket_name: &str) -> bool {
     if let Err(e) = delete_bucket::delete_bucket(client, bucket_name, &mut std::io::stdout()).await
     {
         eprintln!("Error deleting bucket: {}", e);
-        std::process::exit(1);
+        return true;
     }
+
+    false
 }
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -36,22 +43,30 @@ async fn main() -> Result<()> {
     let shared_config = aws_cli_lib::get_aws_config(args.base.profile, region_provider).await;
 
     let client = S3Client::new(&shared_config);
-    if !args.force {
-        if Confirm::new()
-            .with_prompt(format!(
-                "Are you certain you'd like to delete the {} S3 bucket?",
-                style(&args.bucket).white().bold()
-            ))
-            .default(false)
-            .interact()?
-        {
-            delete_and_capture(&client, &args.bucket).await;
+    let mut should_exit_with_error = false;
+    for bucket in args.buckets {
+        if !args.force {
+            if Confirm::new()
+                .with_prompt(format!(
+                    "Are you certain you'd like to delete the {} S3 bucket?",
+                    style(&bucket).white().bold()
+                ))
+                .default(false)
+                .interact()?
+            {
+                should_exit_with_error =
+                    delete_and_capture(&client, &bucket).await || should_exit_with_error;
+            } else {
+                println!("Skipping {}", style(&bucket).white().bold());
+            }
         } else {
-            println!("Cancelled");
+            should_exit_with_error =
+                delete_and_capture(&client, &bucket).await || should_exit_with_error;
         }
-    } else {
-        delete_and_capture(&client, &args.bucket).await;
     }
 
+    if should_exit_with_error {
+        std::process::exit(1);
+    }
     Ok(())
 }
