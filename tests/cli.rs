@@ -52,6 +52,27 @@ mod cli_tests {
             .body(ByteStream::from(buffer.to_vec()))
             .send()
             .await;
+
+        // Delete one of the files to create a Delete Marker
+        let object_key = "your-object-key-delete";
+
+        let mut buffer = [0u8; 1024];
+        rand::thread_rng().fill(&mut buffer[..]);
+
+        let _ = client
+            .put_object()
+            .bucket(bucket_name)
+            .key(object_key)
+            .body(ByteStream::from(buffer.to_vec()))
+            .send()
+            .await;
+
+        let _ = client
+            .delete_object()
+            .bucket(bucket_name)
+            .key(object_key)
+            .send()
+            .await;
     }
     #[tokio::test]
     async fn happy_flow() {
