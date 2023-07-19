@@ -5,7 +5,10 @@ mod cli_tests {
     use aws_sdk_s3::{
         operation::list_objects_v2::ListObjectsV2Output,
         primitives::ByteStream,
-        types::{BucketLocationConstraint, CreateBucketConfiguration},
+        types::{
+            BucketLocationConstraint, BucketVersioningStatus, CreateBucketConfiguration,
+            VersioningConfiguration,
+        },
         Client as S3Client,
     };
     use aws_types::region::Region;
@@ -17,12 +20,31 @@ mod cli_tests {
     async fn create_tmp_bucket(client: &S3Client, bucket_name: &str) {
         let _ = client.create_bucket().bucket(bucket_name).send().await;
 
+        let versioning_config = VersioningConfiguration::builder()
+            .set_status(Some(BucketVersioningStatus::Enabled))
+            .build();
+
+        let _ = client
+            .put_bucket_versioning()
+            .bucket(bucket_name)
+            .versioning_configuration(versioning_config)
+            .send()
+            .await;
+
         let object_key = "your-object-key";
 
         let mut buffer = [0u8; 1024];
         rand::thread_rng().fill(&mut buffer[..]);
 
         // Upload the file
+        let _ = client
+            .put_object()
+            .bucket(bucket_name)
+            .key(object_key)
+            .body(ByteStream::from(buffer.to_vec()))
+            .send()
+            .await;
+        // Reupload the file
         let _ = client
             .put_object()
             .bucket(bucket_name)

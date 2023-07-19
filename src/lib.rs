@@ -1,6 +1,7 @@
 use anyhow::Result;
+use aws_sdk_s3::operation::list_object_versions::ListObjectVersionsError;
 use aws_sdk_s3::operation::list_objects_v2::{ListObjectsV2Error, ListObjectsV2Output};
-use aws_sdk_s3::types::{Delete, ObjectIdentifier};
+use aws_sdk_s3::types::{Delete, ObjectIdentifier, ObjectVersion};
 use aws_sdk_s3::Client;
 use aws_sdk_sts::client::customize::Response;
 use aws_sdk_sts::error::SdkError;
@@ -31,6 +32,67 @@ async fn get_objects_to_delete(
     paginator
         .collect::<Result<Vec<ListObjectsV2Output>, SdkError<ListObjectsV2Error, Response>>>()
         .await
+}
+
+async fn delete_versioned_objects(
+    client: &Client,
+    bucket_name: &str,
+) -> Result<usize, SdkError<ListObjectVersionsError>> {
+    let mut all_versions: Vec<ObjectVersion> = Vec::new();
+    let mut next_key_marker: Option<String> = None;
+    let mut next_version_id_marker: Option<String> = None;
+
+    // No paginator :-(
+    loop {
+        let mut request_builder = client.list_object_versions().bucket(bucket_name);
+
+        if let Some(marker) = next_key_marker {
+            request_builder = request_builder.key_marker(marker);
+        }
+
+        if let Some(marker) = next_version_id_marker {
+            request_builder = request_builder.version_id_marker(marker);
+        }
+
+        let result = request_builder.send().await?;
+
+        if let Some(versions) = result.versions() {
+            all_versions.extend_from_slice(versions);
+        }
+
+        if result.is_truncated() {
+            next_key_marker = result.next_key_marker().map(|s| s.to_string());
+            next_version_id_marker = result.next_version_id_marker().map(|s| s.to_string());
+        } else {
+            break;
+        }
+    }
+
+    let deleted_objects_count = all_versions.len();
+    let tasks = FuturesUnordered::new();
+    let pb = ProgressBar::new(deleted_objects_count as u64);
+
+    for item in all_versions {
+        if let Some(version) = item.version_id() {
+            let task = client
+                .delete_object()
+                .bucket(bucket_name)
+                .version_id(version)
+                .send();
+
+            let local_pb = pb.clone();
+            let wrapped_task = async move {
+                let result = task.await;
+                local_pb.inc(1);
+                result
+            };
+
+            tasks.push(wrapped_task);
+        }
+    }
+    tasks.collect::<Vec<_>>().await;
+
+    Ok(deleted_objects_count)
 }
 
 async fn delete_objects(
@@ -90,7 +152,7 @@ pub async fn delete_bucket(
     writeln!(
         writer,
         "{} {}Collecting objects to delete",
-        style("[1/5]").bold().dim(),
+        style("[1/6]").bold().dim(),
         LOOKING_GLASS
     )?;
 
@@ -111,7 +173,7 @@ pub async fn delete_bucket(
     writeln!(
         writer,
         "{} {}Deleting {} objects ...",
-        style("[2/5]").bold().dim(),
+        style("[2/6]").bold().dim(),
         START_PROCESS,
         counter
     )?;
@@ -119,7 +181,16 @@ pub async fn delete_bucket(
     writeln!(
         writer,
         "{} {}Successfully deleted {} objects.",
-        style("[3/5]").bold().dim(),
+        style("[3/6]").bold().dim(),
+        MIDDLE_PROCESS,
+        deleted_objects_count
+    )?;
+
+    let deleted_objects_count = delete_versioned_objects(client, bucket_name).await?;
+    writeln!(
+        writer,
+        "{} {}Successfully deleted {} versioned objects.",
+        style("[4/6]").bold().dim(),
         MIDDLE_PROCESS,
         deleted_objects_count
     )?;
@@ -127,15 +198,25 @@ pub async fn delete_bucket(
     writeln!(
         writer,
         "{} {}Deleting the bucket {}.",
-        style("[4/5]").bold().dim(),
+        style("[5/6]").bold().dim(),
         END_PROCESS,
         style(bucket_name).white()
     )?;
-    client.delete_bucket().bucket(bucket_name).send().await?;
+    let _ = client
+        .delete_bucket()
+        .bucket(bucket_name)
+        .send()
+        .await
+        .map_err(|err| {
+            let service_error = err.into_service_error();
+            info!("Call failed {:?}", service_error);
+            Err::<(), anyhow::Error>(anyhow::anyhow!("{}", service_error.meta().code().unwrap()))
+        });
+
     writeln!(
         writer,
         "{} {}Bucket {} deleted successfully.",
-        style("[5/5]").bold().dim(),
+        style("[6/6]").bold().dim(),
         SPARKLE,
         style(bucket_name).white()
     )?;
