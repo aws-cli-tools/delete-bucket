@@ -16,6 +16,19 @@ use tokio_stream::StreamExt;
 
 const CHUNK_SIZE: usize = 1000;
 
+async fn disable_versioning(client: &Client, bucket_name: &str) {
+    // Suspend object versioning
+    let versioning_config = VersioningConfiguration::builder()
+        .set_status(Some(BucketVersioningStatus::Suspended))
+        .build();
+
+    let _ = client
+        .put_bucket_versioning()
+        .bucket(bucket_name)
+        .versioning_configuration(versioning_config)
+        .send()
+        .await;
+}
 async fn get_objects_to_delete(
     client: &Client,
     bucket_name: &str,
@@ -39,18 +52,6 @@ async fn delete_versioned_objects(
     let mut all_versions: Vec<(String, String)> = Vec::new();
     let mut next_key_marker: Option<String> = None;
     let mut next_version_id_marker: Option<String> = None;
-
-    // Suspend object versioning
-    let versioning_config = VersioningConfiguration::builder()
-        .set_status(Some(BucketVersioningStatus::Suspended))
-        .build();
-
-    let _ = client
-        .put_bucket_versioning()
-        .bucket(bucket_name)
-        .versioning_configuration(versioning_config)
-        .send()
-        .await;
 
     // No paginator :-(
     loop {
@@ -185,41 +186,16 @@ pub async fn delete_bucket(
 ) -> Result<()> {
     writeln!(
         writer,
-        "{} Disabling Bucket Versioning and deleting versioned objects",
-        style("[1/6]").bold().dim(),
+        "{} Disabling Bucket Versioning",
+        style("[1/7]").bold().dim(),
     )?;
 
-    let (successful_count, failed_count) = match delete_versioned_objects(client, bucket_name).await
-    {
-        Ok((successful_count, failed_count)) => (successful_count, failed_count),
-        Err(err) => {
-            let service_error = err.into_service_error();
-            info!("Call failed {:?}", service_error);
-            return Err(anyhow::anyhow!("{}", service_error.meta().code().unwrap()));
-        }
-    };
-    let failed_text = if failed_count > 0 {
-        format!("Failed deleting {} versioned objects", failed_count)
-    } else {
-        String::from("")
-    };
-    writeln!(
-        writer,
-        "{} Successfully deleted {} versioned objects. {}",
-        style("[2/6]").bold().dim(),
-        successful_count,
-        failed_text
-    )?;
-
-    if failed_count > 0 {
-        info!("Failed deleting all objects.");
-        return Err(anyhow::anyhow!("Failed deleting all objects."));
-    }
+    disable_versioning(client, bucket_name).await;
 
     writeln!(
         writer,
-        "{} Collecting non-versioned objects to delete",
-        style("[3/6]").bold().dim(),
+        "{} Collecting objects to delete",
+        style("[2/7]").bold().dim(),
     )?;
 
     let result = get_objects_to_delete(client, bucket_name).await;
@@ -239,21 +215,58 @@ pub async fn delete_bucket(
     writeln!(
         writer,
         "{} Deleting {} objects ...",
-        style("[3/6]").bold().dim(),
+        style("[3/7]").bold().dim(),
         counter
     )?;
     let deleted_objects_count = delete_objects(client, bucket_name, &objects).await?;
     writeln!(
         writer,
         "{} Successfully deleted {} objects.",
-        style("[4/6]").bold().dim(),
+        style("[4/7]").bold().dim(),
         deleted_objects_count
     )?;
+
+    if deleted_objects_count < counter as usize {
+        info!("Failed deleting all objects.");
+        return Err(anyhow::anyhow!("Failed deleting all object."));
+    }
+
+    writeln!(
+        writer,
+        "{} Deleting object versions ...",
+        style("[5/7]").bold().dim(),
+    )?;
+    let (successful_count, failed_count) = match delete_versioned_objects(client, bucket_name).await
+    {
+        Ok((successful_count, failed_count)) => (successful_count, failed_count),
+        Err(err) => {
+            let service_error = err.into_service_error();
+            info!("Call failed {:?}", service_error);
+            return Err(anyhow::anyhow!("{}", service_error.meta().code().unwrap()));
+        }
+    };
+    let failed_text = if failed_count > 0 {
+        format!("Failed deleting {} versioned objects", failed_count)
+    } else {
+        String::from("")
+    };
+    writeln!(
+        writer,
+        "{} Successfully deleted {} object versions. {}",
+        style("[6/7]").bold().dim(),
+        successful_count,
+        failed_text
+    )?;
+
+    if failed_count > 0 {
+        info!("Failed deleting all objects.");
+        return Err(anyhow::anyhow!("Failed deleting all object versions."));
+    }
 
     writeln!(
         writer,
         "{} Deleting the bucket {}.",
-        style("[5/6]").bold().dim(),
+        style("[7/7]").bold().dim(),
         style(bucket_name).white()
     )?;
     if let Err(err) = client.delete_bucket().bucket(bucket_name).send().await {
