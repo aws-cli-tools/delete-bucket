@@ -39,6 +39,7 @@ jobs:
         run: just gate
       - name: Collect code coverage
         run: just code-coverage
+      - name: Calculate code coverage
         uses: romeovs/lcov-reporter-action@v0.2.16
         with:
           lcov-file: ./target/cov.lcov
