@@ -1,5 +1,5 @@
 [![Actions Status](https://github.com/aws-cli-tools/delete-bucket/workflows/Code%20Gating/badge.svg?branch=main)](https://github.com/aws-cli-tools/delete-bucket/workflows/Code%20Gating/badge.svg?branch=main)
-
+[![Actions Status](https://img.shields.io/badge/built_with-rust-red)](https://img.shields.io/badge/built_with-rust-red)
 
 # AWS S3 Bucket Deletion CLI
 
