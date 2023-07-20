@@ -39,10 +39,8 @@ jobs:
         run: just gate
       - name: Collect code coverage
         run: just code-coverage
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
+        uses: romeovs/lcov-reporter-action@v0.2.16
         with:
-          files: "target/cov.lcov"
-          token: ${{ secrets.CODECOV_TOKEN }}
+          lcov-file: ./target/cov.lcov
    
     

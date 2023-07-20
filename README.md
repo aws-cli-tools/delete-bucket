@@ -1,4 +1,3 @@
-[![codecov](https://codecov.io/gh/aws-cli-tools/delete-bucket/branch/main/graph/badge.svg?token=NW4955XIZT)](https://codecov.io/gh/aws-cli-tools/delete-bucket)
 [![Actions Status](https://github.com/aws-cli-tools/delete-bucket/workflows/Code%20Gating/badge.svg?branch=main)](https://github.com/aws-cli-tools/delete-bucket/workflows/Code%20Gating/badge.svg?branch=main)
 
 
