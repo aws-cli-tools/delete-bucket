@@ -13,8 +13,8 @@ test:
 	cargo test {{ if has_aws == "true" {"--all-features"} else {""} }}
 
 code-coverage $CARGO_INCREMENTAL="{{cargo_incremental}}":
-	LLVM_PROFILE_FILE=tmp-%p-%m.profraw RUSTFLAGS=-Cinstrument-coverage just test
-	grcov . -s . --binary-path ./target/debug/ -t lcov --branch --ignore '../*' --ignore "/*" --ignore-not-existing -o ./target/cov.lcov
+	LLVM_PROFILE_FILE=tmp-%p-%m.profraw RUSTFLAGS="-Cinstrument-coverage" just test
+	grcov . -s . --binary-path ./target/debug/ -t lcov --branch --ignore-not-existing -o ./target/cov.lcov
 	rm -f *.profraw
 
 audit:
