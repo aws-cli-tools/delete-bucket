@@ -37,12 +37,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Gate
         run: just gate
-      - name: Collect code coverage
+      - name: Code coverage
         run: just code-coverage
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          files: "target/cov.lcov"
-          token: ${{ secrets.CODECOV_TOKEN }}
+
    
     

@@ -17,19 +17,21 @@ mod cli_tests {
     use std::process::Command;
 
     const REGION: &str = "us-east-1";
-    async fn create_tmp_bucket(client: &S3Client, bucket_name: &str) {
+    async fn create_tmp_bucket(client: &S3Client, bucket_name: &str, enable_versioning: bool) {
         let _ = client.create_bucket().bucket(bucket_name).send().await;
 
-        let versioning_config = VersioningConfiguration::builder()
-            .set_status(Some(BucketVersioningStatus::Enabled))
-            .build();
+        if enable_versioning {
+            let versioning_config = VersioningConfiguration::builder()
+                .set_status(Some(BucketVersioningStatus::Enabled))
+                .build();
 
-        let _ = client
-            .put_bucket_versioning()
-            .bucket(bucket_name)
-            .versioning_configuration(versioning_config)
-            .send()
-            .await;
+            let _ = client
+                .put_bucket_versioning()
+                .bucket(bucket_name)
+                .versioning_configuration(versioning_config)
+                .send()
+                .await;
+        }
 
         let object_key = "your-object-key";
 
@@ -90,8 +92,8 @@ mod cli_tests {
             .await;
         let client = S3Client::new(&sdk_config);
 
-        create_tmp_bucket(&client, &bucket_name).await;
-        create_tmp_bucket(&client, &bucket_name2).await;
+        create_tmp_bucket(&client, &bucket_name, true).await;
+        create_tmp_bucket(&client, &bucket_name2, false).await;
 
         let mut cmd = Command::cargo_bin("delete-bucket").unwrap();
         cmd.args([
