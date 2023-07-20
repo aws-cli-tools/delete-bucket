@@ -27,7 +27,7 @@ Options:
 * `-f, --force` Do not prompt for approval.
 * `-p, --profile` The AWS profile to use
 * `-r, --region` The AWS region to use
-* `-b, --bucket` Bucket to delete.◊
+* `-b, --buckets` Buckets to delete.
 
 ## Speed comparison
 Deleting 10K files in a single bucket on `c6i.2xlarge` machine:
