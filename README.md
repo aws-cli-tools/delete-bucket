@@ -11,9 +11,10 @@ This CLI application is designed to interact with AWS S3 service for the purpose
 
 When executed, this CLI performs the following operations:
 
-1. Lists all the objects (files) in the given bucket.
-2. Deletes all the objects retrieved from the bucket.
-3. After ensuring that all objects have been deleted, it then proceeds to delete the bucket.
+1. Detect whether the bucket has Object Versioning enabled and disable it if it does.
+2. Lists all the objects in the given bucket.
+3. Deletes all the objects retrieved from the bucket.
+4. After ensuring that all objects have been deleted, it then proceeds to delete the bucket.
 
 ## Usage
 To run the CLI:
