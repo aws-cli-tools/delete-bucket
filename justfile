@@ -14,7 +14,7 @@ test:
 
 code-coverage $CARGO_INCREMENTAL="{{cargo_incremental}}":
 	LLVM_PROFILE_FILE=tmp-%p-%m.profraw RUSTFLAGS="-Cinstrument-coverage" just test
-	grcov . -s . --binary-path ./target/debug/ -t lcov --branch --ignore-not-existing -o ./target/cov.lcov
+	grcov . --binary-path ./target/debug/ -t lcov --source-dir ./src --branch --ignore-not-existing --ignore "*cargo*" --ignore "*liballoc*" --ignore "*rustc*" --ignore "*libcore*" --ignore "*github.com*" -o ./target/cov.lcov
 	rm -f *.profraw
 
 audit:
