@@ -39,11 +39,6 @@ jobs:
         run: just gate
       - name: Code coverage
         run: just code-coverage
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          files: "target/cobertura"
-          token: ${{ secrets.CODECOV_TOKEN }}
 
    
     
