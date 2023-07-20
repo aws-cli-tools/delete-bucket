@@ -16,7 +16,7 @@ use tokio_stream::StreamExt;
 
 const CHUNK_SIZE: usize = 1000;
 static ARROW: Emoji<'_, '_> = Emoji("➡️ ", "");
-
+static SUCCESS: Emoji<'_, '_> = Emoji("💥 ", "");
 async fn get_objects_to_delete(
     client: &Client,
     bucket_name: &str,
@@ -75,7 +75,7 @@ async fn delete_objects(
         Ok(deleted_objects_count)
     } else {
         Err(anyhow::anyhow!(format!(
-            "There were still objects left in the bucket. Failed to delete '{}' objects.",
+            "There were still objects left in the bucket. Failed to delete {} objects.",
             objects.key_count
         )))
     }
@@ -120,11 +120,7 @@ pub async fn delete_bucket(
             return Err(anyhow::anyhow!("Failed deleting all object."));
         }
     } else {
-        writeln!(
-            writer,
-            "{} Deleting object versions ...",
-            ARROW,
-        )?;
+        writeln!(writer, "{} Deleting object versions ...", ARROW,)?;
         let (successful_count, failed_count) =
             match bucket_versioning::delete_versioned_objects(client, bucket_name).await {
                 Ok((successful_count, failed_count)) => (successful_count, failed_count),
@@ -142,9 +138,7 @@ pub async fn delete_bucket(
         writeln!(
             writer,
             "{} Successfully deleted {} object versions. {}",
-            ARROW,
-            successful_count,
-            failed_text
+            ARROW, successful_count, failed_text
         )?;
 
         if failed_count > 0 {
@@ -168,7 +162,7 @@ pub async fn delete_bucket(
     writeln!(
         writer,
         "{} Bucket {} deleted successfully.",
-        ARROW,
+        SUCCESS,
         style(bucket_name).white()
     )?;
 
