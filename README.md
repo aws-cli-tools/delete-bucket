@@ -48,8 +48,8 @@ You can download the pre-compiled binaries directly from the GitHub releases pag
 Visit the [releases page](https://github.com/aws-cli-tools/delete-bucket/releases) to download the appropriate binary.
 For example (make sure to use the latest version):
 ```bash
-wget https://github.com/aws-cli-tools/whoami/releases/download/v0.1.9/whoami-v0.1.9-x86_64-linux.tar.xz
-tar -xf whoami-v0.1.9-x86_64-linux.tar.xz
+wget https://github.com/aws-cli-tools/delete-bucket/releases/download/v0.1.5/delete-bucket-v0.1.5-x86_64-linux.tar.xz
+tar -xf delete-bucket-v0.1.5-x86_64-linux.tar.xz
 ```
 
 ### Method 2: Using Homebrew (for macOS users)
