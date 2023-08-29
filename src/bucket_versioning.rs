@@ -1,13 +1,25 @@
+use std::{
+    num::NonZeroU32,
+    sync::{Arc, Mutex},
+};
+
 use aws_sdk_s3::{
-    operation::list_object_versions::ListObjectVersionsError,
+    operation::{
+        delete_object::{DeleteObjectError, DeleteObjectOutput},
+        list_object_versions::ListObjectVersionsError,
+    },
     types::{BucketVersioningStatus, VersioningConfiguration},
     Client,
 };
 use aws_sdk_sts::error::SdkError;
-use futures::stream::FuturesUnordered;
+use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
+use futures::{stream::FuturesUnordered, StreamExt};
+use governor::{Quota, RateLimiter};
 use indicatif::ProgressBar;
 use log::info;
-use tokio_stream::StreamExt;
+
+type DeleteObjectResult = Result<DeleteObjectOutput, SdkError<DeleteObjectError, HttpResponse>>;
+type SharedResults = Arc<Mutex<Vec<DeleteObjectResult>>>;
 
 pub async fn disable_versioning(client: &Client, bucket_name: &str) -> bool {
     if let Ok(has_versioning) = client
@@ -101,8 +113,11 @@ pub async fn delete_versioned_objects(
     let deleted_objects_count = all_versions.len();
     let tasks = FuturesUnordered::new();
     let pb = ProgressBar::new(deleted_objects_count as u64);
+    let rate = Quota::per_second(NonZeroU32::new(500).unwrap());
+    let rate_limiter = Arc::new(RateLimiter::direct(rate));
 
     for item in all_versions {
+        let rate_limiter = rate_limiter.clone();
         let task = client
             .delete_object()
             .bucket(bucket_name)
@@ -112,6 +127,7 @@ pub async fn delete_versioned_objects(
 
         let local_pb = pb.clone();
         let wrapped_task = async move {
+            rate_limiter.until_ready().await;
             let result = task.await;
             local_pb.inc(1);
             result
@@ -119,10 +135,25 @@ pub async fn delete_versioned_objects(
 
         tasks.push(wrapped_task);
     }
+    let results: SharedResults = Arc::new(Mutex::new(Vec::new()));
 
-    let results = tasks.collect::<Vec<_>>().await;
+    tasks
+        .for_each_concurrent(2, |result| async {
+            let mut locked_results = results.lock().unwrap();
+            locked_results.push(result);
 
-    let successful_count = results.iter().filter(|&result| result.is_ok()).count();
+            if let Err(e) = &locked_results.last().unwrap() {
+                info!("Error deleting: {:?}", e);
+            }
+        })
+        .await;
+
+    let successful_count = results
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|&result| result.is_ok())
+        .count();
     let failed_count = deleted_objects_count - successful_count;
 
     Ok((successful_count, failed_count))
