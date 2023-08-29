@@ -10,7 +10,7 @@ format:
 
 # If your environment is connected to AWS `test` will run integration tests as well.
 test:
-	cargo test {{ if has_aws == "true" {"--all-features"} else {""} }}
+	cargo test {{ if has_aws == "true" {"--all-features"} else {""} }} --locked
 
 code-coverage $CARGO_INCREMENTAL="{{cargo_incremental}}":
 	LLVM_PROFILE_FILE=tmp-%p-%m.profraw RUSTFLAGS="-Cinstrument-coverage" just test
