@@ -4,31 +4,34 @@ version = "0.1.5"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.71"
-async-trait = "0.1.68"
+anyhow = "1.0.75"
+async-trait = "0.1.73"
 aws-cli-lib = { git = "https://github.com/aws-cli-tools/aws-cli-lib.git", version = "0.1.0" }
-aws-config = { version = "0.55.3", default-features = false, features = ["rustls"] }
-aws-sdk-s3 = "0.28.0"
-aws-sdk-sts = "0.28.0"
-aws-types = "0.55.3"
-clap = { version = "4.3.9", features = ["derive"] }
+aws-config = { version = "0.56.1", default-features = false, features = ["rustls"] }
+aws-sdk-s3 = "0.30.0"
+aws-sdk-sts = "0.30.0"
+aws-smithy-http = "0.56.1"
+aws-smithy-runtime-api = "0.56.1"
+aws-types = "0.56.1"
+clap = { version = "4.4.0", features = ["derive"] }
 console = "0.15.7"
 dialoguer = "0.10.4"
 env_logger = "0.10.0"
 futures = "0.3.28"
 hermit-abi = "0.3.2"
-indicatif = "0.17.5"
-log = "0.4.19"
+indicatif = "0.17.6"
+log = "0.4.20"
 mockall = "0.11.4"
-serde_json = "1.0.99"
-tokio = { version = "1.29.0", features = ["full"] }
+serde_json = "1.0.105"
+tokio = { version = "1.32.0", features = ["full"] }
+tokio-rustls = "0.24.1"
 tokio-stream = "0.1.14"
 
 [dev-dependencies]
-assert_cmd = "2.0.11"
+assert_cmd = "2.0.12"
 predicates = "3.0.3"
 rand = "0.8.5"
-rstest = "0.17.0"
+rstest = "0.18.2"
 
 [features]
 aws_configured = []

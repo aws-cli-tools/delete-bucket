@@ -5,8 +5,9 @@ use anyhow::Result;
 use aws_sdk_s3::operation::list_objects_v2::{ListObjectsV2Error, ListObjectsV2Output};
 use aws_sdk_s3::types::{Delete, ObjectIdentifier};
 use aws_sdk_s3::Client;
-use aws_sdk_sts::client::customize::Response;
+
 use aws_sdk_sts::error::SdkError;
+use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use console::{style, Emoji};
 use futures::stream::FuturesUnordered;
 use indicatif::ProgressBar;
@@ -20,7 +21,7 @@ static SUCCESS: Emoji<'_, '_> = Emoji("💥 ", "");
 async fn get_objects_to_delete(
     client: &Client,
     bucket_name: &str,
-) -> Result<Vec<ListObjectsV2Output>, SdkError<ListObjectsV2Error, Response>> {
+) -> Result<Vec<ListObjectsV2Output>, SdkError<ListObjectsV2Error, HttpResponse>> {
     info!("Calling 'list_objects_v2 to pull objects to delete");
     let paginator = client
         .list_objects_v2()
@@ -28,7 +29,7 @@ async fn get_objects_to_delete(
         .into_paginator()
         .send();
     paginator
-        .collect::<Result<Vec<ListObjectsV2Output>, SdkError<ListObjectsV2Error, Response>>>()
+        .collect::<Result<Vec<ListObjectsV2Output>, SdkError<ListObjectsV2Error, HttpResponse>>>()
         .await
 }
 
